@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0
+    restart: always
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+
+  postgres-db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nilm_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-nilm_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    restart: always
+    depends_on:
+      - mqtt-broker
+      - postgres-db
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-nilm_user}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres-db:5432/${POSTGRES_DB:-nilm_db}"
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      MQTT_BROKER_HOST: "mqtt-broker"
+      MQTT_BROKER_PORT: 1883
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+
+volumes:
+  mosquitto-data:
+  postgres-data:
