@@ -19,8 +19,9 @@ services:
       - key: MQTT_BROKER_PORT
         value: "1883"
 
-  - type: static_site
+  - type: web
     name: nilm-dashboard
+    runtime: static
     buildCommand: npm ci --prefix frontend && npm run build --prefix frontend
     staticPublishPath: ./frontend/dist
     envVars:
